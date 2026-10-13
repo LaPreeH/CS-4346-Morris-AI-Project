@@ -1,0 +1,105 @@
+CS4346 Morris AI Tournament — Improved Static Estimation
+
+1. FEATURES
+
+The improved estimator evaluates the position from White's point of view;
+positive scores favor White and negative scores favor Black. The exact same
+function supports both colors, since Black searches for the lowest score.
+
+- Piece advantage: number of White pieces minus number of Black pieces.
+- Completed mills: difference in the number of three-piece lines.
+- Potential mills: difference in lines with two friendly pieces and one vacancy.
+- Opening positional flexibility: difference in neighbor counts of occupied
+  locations, rewarding pieces at intersections with several possible routes.
+- Midgame/endgame mobility: difference in the number of legal successor boards.
+- Midgame/endgame blocked pieces: difference in pieces with no adjacent vacancy
+  (only counted for a side with more than three pieces).
+- Terminal situations: opponent reduced to <=2 pieces or unable to move means
+  a win, with a very large positive/negative score.
+
+2. WHY THESE FEATURES
+
+Material advantage is important because the goal is to capture pieces. A
+completed mill creates a defensive structure. A two-piece line containing an
+empty spot poses a near-term threat of making a mill. Mobility and access to
+high-degree locations provide future choices. Blocking matters because a side
+can lose when it cannot move. Terminal wins should outrank small positional
+advantages.
+
+3. WEIGHTS AND COMBINATION
+
+Opening phase:
+100 * (WhitePieces - BlackPieces)
++ 45 * (WhiteMills - BlackMills)
++ 24 * (WhitePotentialMills - BlackPotentialMills)
++ 3 * (sum of White occupied neighbor degrees
+       - sum of Black occupied neighbor degrees)
+
+Midgame/endgame:
+1000 * (WhitePieces - BlackPieces)
++ 90 * (WhiteMills - BlackMills)
++ 35 * (WhitePotentialMills - BlackPotentialMills)
++ 3 * (WhiteMoves - BlackMoves)
++ 15 * (BlockedBlackPieces - BlockedWhitePieces)
+
+A decisive terminal position returns +100000 if Black cannot continue and
+-100000 if White cannot continue. This is a heuristic, not a claim that the
+weights are mathematically optimal. For exact implementation details see
+improved_evaluation in morris_engine.py.
+
+4. WHY IT MAY PLAY BETTER THAN THE ORIGINAL
+
+The handout's opening estimator is only WhitePieces - BlackPieces, so many
+placements at the same search depth tie. The improved estimator separates
+moves that establish future mills and useful strategic positions. In the
+midgame the original strongly emphasizes material and Black's mobility but
+omits White's flexibility, mills, and threats. Our version considers both
+players symmetrically and more aspects of short-term tactics. Its advantage
+must still be measured in tournament play; stronger performance is not
+mathematically guaranteed.
+
+5. TWO REPRODUCIBLE DIFFERENT-MOVE EXAMPLES
+
+Both examples are White to move in the opening at depth 2. Enter each input
+board in a text file and run MiniMaxOpening.py and MiniMaxOpeningImproved.py
+against that file with the same depth. Each example contains exactly 23 slots.
+
+EXAMPLE 1
+Input:           xBxxxBxxxxxxWxBxxxWxxxW
+Original move:   WBxxxBxxxxxxWxBxxxWxxxW
+Improved move:   xBxxxBxxxxxxWxBxxxWWxxW
+
+The original move is the first tied optimal move in search order. Both leave
+4 White and 3 Black pieces, but the improved move leaves White with two
+potential mills (two White pieces and an empty slot) instead of none. These
+future mill threats are strategically preferable to an arbitrary placement.
+
+EXAMPLE 2
+Input:           xxxBxWBBBBxxBxxWWxxWxWW
+Original move:   xxxxxWBBBBxxBxWWWxxWxWW
+Improved move:   xxxxxWBBBBxxBxxWWxWWxWW
+
+Both successor boards have 7 White and 5 Black pieces and two completed White
+mills. The original continuation has two White potential mills; the improved
+continuation has three. Thus the new heuristic prefers an additional avenue
+for forming a mill and capturing an opponent's piece later.
+
+6. ALPHA-BETA SAVINGS (ORIGINAL ESTIMATOR)
+
+Example A: opening, depth 3
+Input: xxBxxxxxxxxWxxBxxBWxxxW
+MINIMAX: 5290 static evaluations
+ALPHA-BETA: 1943 static evaluations
+Both estimate 1 and choose xxBxxxxxxxxWxxBxxBWxWxW.
+
+Example B: opening, depth 3
+Input: BBxBBxWxxxxWxBxWWWxxxxx
+MINIMAX: 7180 static evaluations
+ALPHA-BETA: 584 static evaluations
+Both estimate 2 and choose xBxBBxWxxxxWxBWWWWxxxxx.
+
+Notes: The source handout says that if every opponent piece is in a mill, no
+piece is removed when a mill is formed. This program follows that rule.
+The full tournament move time limit and input protocol were not supplied;
+the tournament program uses explicit color and phase arguments, and the
+chosen depth should be benchmarked against the actual deadline.
