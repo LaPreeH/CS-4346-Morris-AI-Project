@@ -6,6 +6,7 @@ White's perspective for the classic functions; the root can be either color.
 from __future__ import annotations
 from dataclasses import dataclass
 from math import inf
+from time import monotonic
 
 NEIGHBORS = (
     (1, 3, 8), (0, 2, 4), (1, 5, 13), (0, 4, 6, 9),
@@ -150,7 +151,8 @@ class Result:
 
 
 def search(board: str, depth: int, phase: str = 'game', color: str = 'W',
-           alpha_beta: bool = False, improved: bool = False) -> Result:
+           alpha_beta: bool = False, improved: bool = False,
+           deadline: float | None = None) -> Result:
     """Depth-limited MINIMAX/ALPHA-BETA, keeping the first equal-score move."""
     validate(board)
     if color not in 'WB' or phase not in ('opening','game') or depth < 0:
@@ -158,8 +160,14 @@ def search(board: str, depth: int, phase: str = 'game', color: str = 'W',
     evaluator = improved_evaluation if improved else original_evaluation
     leaves = 0
 
+    def check_time():
+        if deadline is not None and monotonic() >= deadline:
+            raise TimeoutError("Search time limit exceeded")
+    
     def visit(position: str, remaining: int, turn: str, alpha: float, beta: float) -> int:
         nonlocal leaves
+
+        check_time()
         if remaining == 0:
             leaves += 1
             return evaluator(position, phase)
@@ -221,3 +229,42 @@ def main(phase: str, color: str = 'W', alpha_beta: bool = False, improved: bool 
     print(f'Board Position: {result.board}')
     print(f'Positions evaluated by static estimation: {result.evaluations}')
     print(f'MINIMAX estimate: {result.score}')
+
+def main(phase: str, color: str = 'W', alpha_beta: bool = False, improved: bool = False):
+    import argparse
+    parser = argparse.ArgumentParser(description='23-position Morris AI')
+    parser.add_argument('input_file')
+    parser.add_argument('output_file')
+    parser.add_argument('depth', type=int)
+    args = parser.parse_args()
+    with open(args.input_file, encoding='utf-8') as f:
+        board = validate(f.read())
+    result = search(board, args.depth, phase, color, alpha_beta, improved)
+    with open(args.output_file, 'w', encoding='utf-8') as f:
+        f.write(result.board + '\n')
+    print(f'Board Position: {result.board}')
+    print(f'Positions evaluated by static estimation: {result.evaluations}')
+    print(f'MINIMAX estimate: {result.score}')
+
+
+def timed_search(board: str, color: str, phase: str, seconds: float = 30.0,
+                 maximum_depth: int = 20) -> Result:
+    """Iterative-deepening alpha-beta; return last fully searched legal choice."""
+    validate(board)
+    if seconds <= 0 or maximum_depth < 1:
+        raise ValueError("seconds and maximum_depth must be positive")
+    moves = legal_moves(board, color, phase)
+    if not moves:
+        raise ValueError("No legal move exists for the selected player and phase")
+    deadline = monotonic() + seconds
+    best = Result(moves[0], improved_evaluation(moves[0], phase), 0)
+    for depth in range(1, maximum_depth + 1):
+        if monotonic() >= deadline:
+            break
+        try:
+            completed = search(board, depth, phase, color,
+                               alpha_beta=True, improved=True, deadline=deadline)
+        except TimeoutError:
+            break
+        best = completed
+    return best
